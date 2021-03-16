@@ -2,16 +2,14 @@ import transform
 import streamlit as st
 import numpy as np
 import os
+import tempfile
 from pydicom import dcmread
 from base64 import b64encode
 from PIL import Image
 
 
 MASK_SIZE = 11
-DCM_FILENAME = "tmp/output.dcm"
-SINOGRAM_GIF_FILENAME = "tmp/sinogram.gif"
 SINOGRAM_GIF_DURATION = 15
-OUTPUT_GIF_FILENAME = "tmp/output.gif"
 OUTPUT_GIF_DURATION = 30
 
 
@@ -87,6 +85,7 @@ def show_input_img(result):
         col2.markdown(f"**{data.label}**: {result.meta_data[data.name]}")
 
 
+@st.cache
 def animated_sinogram(sinogram):
     def sinogram_image(rows):
         sinogram_copy = np.zeros(sinogram.shape)
@@ -96,9 +95,10 @@ def animated_sinogram(sinogram):
     frames = [sinogram_image(0)]
     for i in range(sinogram.shape[0]):
         frames.append(sinogram_image(i + 1))
-    frames[0].save(SINOGRAM_GIF_FILENAME, format="GIF", append_images=frames[1:],
+    filename = tempfile.NamedTemporaryFile(suffix=".gif").name
+    frames[0].save(filename, format="GIF", append_images=frames[1:],
                    save_all=True, duration=SINOGRAM_GIF_DURATION, loop=0)
-    return file_to_base64(SINOGRAM_GIF_FILENAME, "file/gif")
+    return file_to_base64(filename, "file/gif")
 
 
 def show_sinogram(result, animate):
@@ -116,6 +116,7 @@ def show_sinogram(result, animate):
 
 
 def save_dcm(image):
+    filename = tempfile.NamedTemporaryFile(suffix=".dcm").name
     ds = dcmread("Tomograf_DICOM.dcm")
     ds.Rows = image.shape[0]
     ds.Columns = image.shape[1]
@@ -128,19 +129,21 @@ def save_dcm(image):
     ds.PatientBirthDate = META_DATA[3].input
     ds.StudyDate = META_DATA[4].input
     ds.AdditionalPatientHistory = META_DATA[5].input
-    ds.save_as(DCM_FILENAME)
+    ds.save_as(filename)
 
-    href = file_to_base64(DCM_FILENAME, "file/dcm")
+    href = file_to_base64(filename, "file/dcm")
     return f'<a href="{href}" download="output.dcm">Download File</a>'
 
 
+@st.cache
 def animated_output_image(images):
     frames = []
     for image in images:
         frames.append(Image.fromarray(np.uint8(image * 255)))
-    frames[0].save(OUTPUT_GIF_FILENAME, format="GIF", append_images=frames[1:],
+    filename = tempfile.NamedTemporaryFile(suffix=".gif").name
+    frames[0].save(filename, format="GIF", append_images=frames[1:],
                    save_all=True, duration=OUTPUT_GIF_DURATION, loop=0)
-    return file_to_base64(OUTPUT_GIF_FILENAME, "file/gif")
+    return file_to_base64(filename, "file/gif")
 
 
 def show_output_image(result, animate):
