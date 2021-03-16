@@ -122,17 +122,16 @@ def show_output_image(output_image, animate, meta_data, mse):
     col1, col2 = expander.beta_columns(2)
 
     img_elem = col1.empty()
-    mse_elem = col1.empty()
     if animate:
         slider = col1.slider("Step", 1, output_image.shape[0], key="output-slider",
                              value=output_image.shape[0], step=1)
         img = output_image[slider - 1]
-        mse_value = mse[slider - 1]
+        col1.markdown("**Mean squared error**")
+        col1.line_chart(mse)
     else:
         img = output_image
-        mse_value = mse
+        col1.markdown(f"**Mean squared error**: {mse}")
     img_elem.image(img, "Output", width=300)
-    mse_elem.markdown(f"**Mean squared error**: {mse_value}")
 
     for data in META_DATA:
         data.input = col2.text_input(data.label, meta_data[data.name], key=f"text-input-{data.name}")
@@ -145,17 +144,17 @@ def show_output_image(output_image, animate, meta_data, mse):
 def main():
     st.set_page_config(page_title="Computed Tomography Simulator")
     st.title("Computed Tomography Simulator")
-    file = st.sidebar.file_uploader("Choose file", type=('png', 'jpg', 'dcm'))
-    params_expander = st.sidebar.beta_expander("Parameters")
+    params_expander = st.sidebar.beta_expander("Parameters", expanded=True)
     emitter_step = params_expander.number_input("Emitter step (deg.)", min_value=0.25,
                                                 max_value=179.75, step=0.25, value=1.0)
     detector_count = params_expander.number_input("Detector count", min_value=1, max_value=720,
                                                   step=1, value=90)
     detector_span = params_expander.number_input("Detector span (deg.)", min_value=0.25,
-                                                 max_value=180.0, step=0.25, value=180.0)
+                                                 max_value=270.0, step=0.25, value=180.0)
     apply_filter = params_expander.checkbox("Filter")
     animate = params_expander.checkbox("Animate")
 
+    file = st.sidebar.file_uploader("Choose file", type=('png', 'jpg', 'dcm'))
     if file is not None:
         result = apply_transformation(file, emitter_step, detector_count,
                                       detector_span, apply_filter, animate)
