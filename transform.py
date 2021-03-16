@@ -168,6 +168,7 @@ def emitter_onto_img(img, measurements, r, emitter_angle, detector_count, detect
 
 
 def sinogram_to_img_simple(sinogram, emitter_step, r, detector_count, detector_span, offset):
+    """unused, always animate, app decides whether to show it"""
     img = np.zeros((2 * r + 1, 2 * r + 1))
     for i, emitter_angle in enumerate(emitter_angles_range(emitter_step)):
         emitter_onto_img(img, sinogram[i, :], r, emitter_angle, detector_count, detector_span)
@@ -185,6 +186,7 @@ def sinogram_to_img_animate(sinogram, emitter_step, r, detector_count, detector_
 
 
 def sinogram_to_img(sinogram, animate, *args):
+    """unused, always animate, app decides whether to show it"""
     if animate:
         return sinogram_to_img_animate(sinogram, *args)
     else:
