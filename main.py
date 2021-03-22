@@ -3,9 +3,9 @@ import streamlit as st
 import numpy as np
 import os
 import tempfile
-from pydicom import dcmread
 from base64 import b64encode
 from PIL import Image
+from pydicom.dataset import FileDataset
 
 
 MASK_SIZE = 11
@@ -27,7 +27,7 @@ META_DATA = [
     MetaData('PatientSex', 'Patient\'s sex'),
     MetaData('PatientBirthDate', 'Patient\'s birth date'),
     MetaData('StudyDate', 'Study date'),
-    MetaData('AdditionalPatientHistory', 'Comment')
+    MetaData('ImageComments', 'Comment')
 ]
 
 
@@ -117,19 +117,20 @@ def show_sinogram(result, animate):
 
 def save_dcm(image):
     filename = tempfile.NamedTemporaryFile(suffix=".dcm").name
-    ds = dcmread("Tomograf_DICOM.dcm")
+    ds, meta = transform.empty_dicom()
     ds.Rows = image.shape[0]
     ds.Columns = image.shape[1]
-    ds.PixelData = np.asarray(image * 255, dtype=np.uint16).tobytes()
+    ds.PixelData = np.asarray(image * 255, dtype=np.uint8).tobytes()
     ds.PatientName = META_DATA[0].input
     ds.PatientID = META_DATA[1].input
-    ds.InstitutionName = 'Politechnika Poznanska'
-    ds.Manufacturer = 'Politechnika Poznanska'
     ds.PatientSex = META_DATA[2].input
     ds.PatientBirthDate = META_DATA[3].input
     ds.StudyDate = META_DATA[4].input
-    ds.AdditionalPatientHistory = META_DATA[5].input
-    ds.save_as(filename)
+    ds.ImageComments = META_DATA[5].input
+    fds = FileDataset(filename, ds, file_meta=meta, preamble=b"\0" * 128)
+    fds.is_implicit_VR = False
+    fds.is_little_endian = True
+    fds.save_as(filename)
 
     href = file_to_base64(filename, "file/dcm")
     return f'<a href="{href}" download="output.dcm">Download File</a>'
