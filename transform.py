@@ -3,6 +3,7 @@ from pydicom import read_file
 from PIL import Image
 from skimage.filters import gaussian
 from pydicom.dataset import Dataset, FileMetaDataset
+import sys
 
 
 def normalize_img(img):
@@ -162,27 +163,37 @@ def img_to_sinogram(img, emitter_step, r, detector_count, detector_span):
     return normalize_img(sinogram)
 
 
-def emitter_onto_img(img, measurements, r, emitter_angle, detector_count, detector_span):
+def emitter_onto_img(img, count, measurements, r, emitter_angle, detector_count, detector_span):
     for i, line in enumerate(lines(r, emitter_angle, detector_count, detector_span)):
         points = points_to_indices(bresenham_list(*line))
         img[points] += measurements[i]
+        count[points] += 1
 
 
 def sinogram_to_img_simple(sinogram, emitter_step, r, detector_count, detector_span, offset):
-    """unused, always animate, app decides whether to show it"""
+    """used in experiment"""
+    angles = emitter_angles_range(emitter_step)
     img = np.zeros((2 * r + 1, 2 * r + 1))
-    for i, emitter_angle in enumerate(emitter_angles_range(emitter_step)):
-        emitter_onto_img(img, sinogram[i, :], r, emitter_angle, detector_count, detector_span)
-    return normalize_img(gaussian(trim_img(img, *offset)))
+    count = img.copy()
+    for i, emitter_angle in enumerate(angles):
+        emitter_onto_img(img, count, sinogram[i, :], r, emitter_angle, detector_count, detector_span)
+
+    used_pixels = count != 0
+    img[used_pixels] /= count[used_pixels]
+    return normalize_img(trim_img(img, *offset))
 
 
 def sinogram_to_img_animate(sinogram, emitter_step, r, detector_count, detector_span, offset):
     angles = emitter_angles_range(emitter_step)
     result = []
     img = np.zeros((2 * r + 1, 2 * r + 1))
+    count = img.copy()
     for i, emitter_angle in enumerate(angles):
-        emitter_onto_img(img, sinogram[i, :], r, emitter_angle, detector_count, detector_span)
-        result.append(normalize_img(gaussian(trim_img(img, *offset))))
+        emitter_onto_img(img, count, sinogram[i, :], r, emitter_angle, detector_count, detector_span)
+        frame = img.copy()
+        used_pixels = count != 0
+        frame[used_pixels] /= count[used_pixels]
+        result.append(normalize_img(trim_img(frame, *offset)))
     return np.array(result)
 
 
@@ -192,6 +203,12 @@ def sinogram_to_img(sinogram, animate, *args):
         return sinogram_to_img_animate(sinogram, *args)
     else:
         return sinogram_to_img_simple(sinogram, *args)
+
+
+def apply_gaussian(images):
+    if len(images.shape) == 2:
+        return gaussian(images)
+    return np.array([gaussian(image) for image in images])
 
 
 def mean_square_error(input_image, output):
@@ -205,6 +222,10 @@ def mean_square_error(input_image, output):
         for i in range(output.shape[0]):
             result[i] = mse(output[i])
         return result
+
+
+def root_mean_square_error(input_image, output):
+    return mean_square_error(input_image, output) ** 0.5
 
 
 def empty_dicom():

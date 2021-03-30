@@ -35,13 +35,13 @@ REQUIRED_META_DATA = set(data.name for data in META_DATA)
 
 
 class Result:
-    def __init__(self, input_image, meta_data, sinogram, filtered_sinogram, output_images, mse):
+    def __init__(self, input_image, meta_data, sinogram, filtered_sinogram, output_images, rmse):
         self.input_image = input_image
         self.meta_data = meta_data
         self.sinogram = sinogram
         self.filtered_sinogram = filtered_sinogram
         self.output_images = output_images
-        self.mse = mse
+        self.rmse = rmse
 
 
 def file_to_base64(filename, content):
@@ -53,7 +53,7 @@ def file_to_base64(filename, content):
 
 
 @st.cache(show_spinner=True)
-def apply_transformation(file, emitter_step, detector_count, detector_span, apply_filter):
+def apply_transformation(file, emitter_step, detector_count, detector_span, apply_filter, apply_gaussian):
     input_image, meta_data = transform.load_img(file)
     meta_data = {name: meta_data.get(name, "-") for name in REQUIRED_META_DATA}
     img, offset = transform.resize_to_square(input_image)
@@ -71,10 +71,12 @@ def apply_transformation(file, emitter_step, detector_count, detector_span, appl
     output_images = transform.sinogram_to_img_animate(used_sinogram, emitter_step_rad,
                                                       r, detector_count, detector_span_rad,
                                                       offset)
-    mse = transform.mean_square_error(input_image, output_images)
+    if apply_gaussian:
+        output_images = transform.apply_gaussian(output_images)
+    rmse = transform.root_mean_square_error(input_image, output_images)
     return Result(input_image, meta_data, sinogram,
                   transform.normalize_img(filtered_sinogram),
-                  output_images, mse)
+                  output_images, rmse)
 
 
 def show_input_img(result):
@@ -93,7 +95,7 @@ def animated_sinogram(sinogram):
         return Image.fromarray(np.uint8(sinogram_copy * 255))
 
     frames = [sinogram_image(0)]
-    for i in range(sinogram.shape[0]):
+    for i in range(min(200, sinogram.shape[0])):
         frames.append(sinogram_image(i + 1))
     filename = tempfile.NamedTemporaryFile(suffix=".gif").name
     frames[0].save(filename, format="GIF", append_images=frames[1:],
@@ -139,8 +141,10 @@ def save_dcm(image):
 @st.cache
 def animated_output_image(images):
     frames = []
-    for image in images:
+    di = 1 if images.shape[0] < 200 else int(images.shape[0] / 200)
+    for image in images[np.arange(0, images.shape[0], di)]:
         frames.append(Image.fromarray(np.uint8(image * 255)))
+    frames.append(Image.fromarray(np.uint8(images[-1] * 255)))
     filename = tempfile.NamedTemporaryFile(suffix=".gif").name
     frames[0].save(filename, format="GIF", append_images=frames[1:],
                    save_all=True, duration=OUTPUT_GIF_DURATION, loop=0)
@@ -158,8 +162,8 @@ def show_output_image(result, animate):
     else:
         img_elem.image(result.output_images[-1], width=300)
 
-    col1.markdown("**Mean squared error**")
-    col1.line_chart(result.mse)
+    col1.markdown("**Root mean squared error**")
+    col1.line_chart(result.rmse)
 
     for data in META_DATA:
         data.input = col2.text_input(data.label, result.meta_data[data.name],
@@ -180,13 +184,14 @@ def main():
                                                   step=1, value=90)
     detector_span = params_expander.number_input("Detector span (deg.)", min_value=0.25,
                                                  max_value=270.0, step=0.25, value=180.0)
-    apply_filter = params_expander.checkbox("Filter")
+    apply_filter = params_expander.checkbox("Convolution filter")
+    apply_gaussian = params_expander.checkbox("Gaussian filter")
     animate = params_expander.checkbox("Animate")
 
     file = st.sidebar.file_uploader("Choose file", type=('png', 'jpg', 'dcm'))
     if file is not None:
         result = apply_transformation(file, emitter_step, detector_count,
-                                      detector_span, apply_filter)
+                                      detector_span, apply_filter, apply_gaussian)
         show_input_img(result)
         show_sinogram(result, animate)
         show_output_image(result, animate)
