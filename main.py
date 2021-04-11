@@ -178,6 +178,7 @@ def main():
     st.set_page_config(page_title="Computed Tomography Simulator")
     st.title("Computed Tomography Simulator")
     params_expander = st.sidebar.beta_expander("Parameters", expanded=True)
+    read_only = params_expander.checkbox("Read Only")
     emitter_step = params_expander.number_input("Emitter step (deg.)", min_value=0.25,
                                                 max_value=179.75, step=0.25, value=1.0)
     detector_count = params_expander.number_input("Detector count", min_value=1, max_value=720,
@@ -189,12 +190,15 @@ def main():
     animate = params_expander.checkbox("Animate")
 
     file = st.sidebar.file_uploader("Choose file", type=('png', 'jpg', 'dcm'))
-    if file is not None:
+    if (file is not None) and (not read_only):
         result = apply_transformation(file, emitter_step, detector_count,
                                       detector_span, apply_filter, apply_gaussian)
         show_input_img(result)
         show_sinogram(result, animate)
         show_output_image(result, animate)
+    if (file is not None) and read_only:
+        result2 = apply_transformation(file, 1, 1, 1, False)
+        show_input_img(result2)
     else:
         st.text("No file")
 
